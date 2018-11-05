@@ -3,6 +3,7 @@ import requests
 from optparse import OptionParser
 from urlparse import urlparse
 import os
+import sys
 import urllib3
 import re
 
@@ -16,7 +17,32 @@ def upload_file(remote, local, auth, request_settings):
     with open(local, "rb") as f:
         data = f.read(65536)
         response = requests.put(remote, auth=auth, proxies=request_settings, verify=False, data=data)
-    return response
+    return response, data
+
+
+def check_vuln(response, uploaded_data):
+    exec_match = re.search(r"execmatch=(.*)\n", uploaded_data)
+    
+    if exec_match is None:
+        raise Exception("Check your test payload. It must contain execmatch=STR\\n")
+
+    # m = re.search("content=[^=].*(49[\.,]?92|YEAR\:[0-9]{4}\:YEAR)", response.text)
+    m = re.search("content=" + exec_match.group(1).strip(), response.text)
+
+    if m is not None:
+        print("[+] VULNERABLE")
+    else:
+        print("[-] Not vulnerable, status code: {}".format(response.status_code))
+
+
+def check_content_type(content_type):
+    xss_types = ["html", "text/xml"]
+
+    for t in xss_types:
+        if t in content_type:
+            return True
+
+    return False
 
 
 if __name__ == "__main__":
@@ -53,23 +79,24 @@ if __name__ == "__main__":
 
     else:
         # get all test files
-        for root, dirs, files in os.walk("tests", topdown=False):
+        no_test_files = True
+        test_folder = sys.path[0] + os.sep + "tests"
+        for root, dirs, files in os.walk(test_folder, topdown=False):
             for name in files:
+                no_test_files = False
                 webdav_name = "justtobelonger_{}".format(name)
+                remote_url = "{}/{}".format(options.url, webdav_name)
 
                 if options.test:
                     # upload
-                    upload_file("{}/{}".format(options.url, webdav_name), os.path.join(root, name), auth, request_settings)
+                    _, uploaded_data = upload_file(remote_url, os.path.join(root, name), auth, request_settings)
 
                     # check vuln
-                    response = requests.get("{}/{}".format(options.url, webdav_name), auth=auth, proxies=request_settings, verify=False)
-                    m = re.search("content=[^=].*(49[\.,]?92|YEAR\:[0-9]{4}\:YEAR)", response.text)
-
-                    if m is not None:
-                        print("[+] VULNERABLE")
-                    else:
-                        print("[-] not vulnerable")
-
+                    response = requests.get(remote_url, auth=auth, proxies=request_settings, verify=False)
+                    
+                    check_vuln(response, uploaded_data)
                 if options.clean:
-                    print("[*] Removing file: {}/{}".format(options.url, webdav_name))
-                    response = requests.delete("{}/{}".format(options.url, webdav_name), auth=auth, proxies=request_settings, verify=False)
+                    print("[*] Removing file: {}".remote_url)
+                    response = requests.delete(remote_url, auth=auth, proxies=request_settings, verify=False)
+        if no_test_files:
+            print("[!] ERROR: not test files in test folder '{}'".format(test_folder))
